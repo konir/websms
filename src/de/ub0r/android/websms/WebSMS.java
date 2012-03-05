@@ -23,6 +23,7 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -55,6 +56,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.provider.MediaStore.MediaColumns;
 import android.support.v4.app.ActionBar;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.view.Menu;
@@ -93,6 +95,7 @@ import de.ub0r.android.websms.connector.common.ConnectorCommand;
 import de.ub0r.android.websms.connector.common.ConnectorSpec;
 import de.ub0r.android.websms.connector.common.ConnectorSpec.SubConnectorSpec;
 import de.ub0r.android.websms.connector.common.Log;
+import de.ub0r.android.websms.connector.common.MmsUtils;
 import de.ub0r.android.websms.connector.common.SMSLengthCalculator;
 import de.ub0r.android.websms.connector.common.Utils;
 
@@ -245,6 +248,8 @@ public class WebSMS extends FragmentActivity implements OnClickListener,
 
 	/** {@link Activity} result request. */
 	private static final int ARESULT_PICK_PHONE = 1;
+	/** {@link Activity} gallery image result request. */
+	private static final int ARESULT_PICK_GALLERYIMAGE = 2;
 
 	/** Size of the emoticons png. */
 	private static final int EMOTICONS_SIZE = 50;
@@ -291,6 +296,11 @@ public class WebSMS extends FragmentActivity implements OnClickListener,
 
 	/** Show cancel button. */
 	private static boolean prefsShowCancel = true;
+
+	/** MMS FileName. */
+	private String sFileName;
+	/** MMS File as ByteArray. */
+	private byte[] bFileByteArray;
 
 	/** TextWatcher en-/disable send/cancel buttons. */
 	private TextWatcher twButtons = new TextWatcher() {
@@ -838,6 +848,48 @@ public class WebSMS extends FragmentActivity implements OnClickListener,
 				}
 			}
 		}
+		if (requestCode == ARESULT_PICK_GALLERYIMAGE) {
+
+			if (resultCode == RESULT_OK) {
+				Uri selectedImage = data.getData();
+				Log.d(TAG, "**** selectedImage Path=" + selectedImage.getPath());
+				String[] filePathColumn = { MediaColumns.DATA };
+
+				Cursor cursor = this.getContentResolver().query(selectedImage,
+						filePathColumn, null, null, null);
+				cursor.moveToFirst();
+
+				int columnIndex = cursor.getColumnIndex(filePathColumn[0]);
+				// file path of selected image
+				String filePath = cursor.getString(columnIndex);
+				Log.d(TAG, "**** filePath=" + filePath);
+				cursor.close();
+
+				File file = new File(filePath);
+				byte[] fileByteArray = null;
+				try {
+					if (file.length() >= 200000) { // Image Size max=200KB
+						Log.d(TAG, "**** Bild zu gross: " + file.length());
+						fileByteArray = MmsUtils.resizeImage(
+								MmsUtils.getBytesFromFile(file), 200000);
+					} else {
+						Log.d(TAG, "**** Bild OK: Länge=" + file.length());
+						fileByteArray = MmsUtils.getBytesFromFile(file);
+					}
+				} catch (Exception e) {
+					Toast.makeText(this, "Error: Kann Bild nicht lesen!!!",
+							Toast.LENGTH_LONG).show();
+					Log.d(TAG, "Error: Kann Bild nicht lesen!!!");
+				}
+
+				this.bFileByteArray = fileByteArray;
+				String fileName = file.getName();
+				this.sFileName = fileName;
+				Log.d(TAG, "fileName=" + fileName + " / fileByteArray="
+						+ fileByteArray);
+			}
+		}
+
 	}
 
 	/**
@@ -1554,6 +1606,14 @@ public class WebSMS extends FragmentActivity implements OnClickListener,
 	public final boolean onOptionsItemSelected(final MenuItem item) {
 		Log.d(TAG, "onOptionsItemSelected(" + item.getItemId() + ")");
 		switch (item.getItemId()) {
+		case R.id.item_attachment:
+			// add attachment by menu item
+			Intent intent = new Intent();
+			intent.setType("image/jpeg");
+			intent.setAction(Intent.ACTION_GET_CONTENT);
+			intent.addCategory(Intent.CATEGORY_OPENABLE);
+			this.startActivityForResult(intent, ARESULT_PICK_GALLERYIMAGE);
+			return true;
 		case R.id.item_send:
 			this.send(prefsConnectorSpec, WebSMS.getSelectedSubConnectorID());
 			return true;
@@ -1797,6 +1857,9 @@ public class WebSMS extends FragmentActivity implements OnClickListener,
 		// fetch text/recipient
 		final String to = this.etTo.getText().toString();
 		final String text = this.etText.getText().toString();
+		final String fileName = this.sFileName;
+		final byte[] fileByteArray = this.bFileByteArray;
+
 		if (to.length() == 0 || text.length() == 0) {
 			return;
 		}
@@ -1805,7 +1868,7 @@ public class WebSMS extends FragmentActivity implements OnClickListener,
 
 		final String[] tos = Utils.parseRecipients(to);
 		final ConnectorCommand command = ConnectorCommand.send(null, null,
-				null, tos, text, false);
+				null, tos, text, false, fileName, fileByteArray);
 		WebSMSReceiver.saveMessage(null, this, command,
 				WebSMSReceiver.MESSAGE_TYPE_DRAFT);
 		this.reset(false);
@@ -1883,7 +1946,8 @@ public class WebSMS extends FragmentActivity implements OnClickListener,
 
 		final String[] tos = Utils.parseRecipients(to);
 		final ConnectorCommand command = ConnectorCommand.send(subconnector,
-				defPrefix, defSender, tos, text, flashSMS);
+				defPrefix, defSender, tos, text, flashSMS, this.sFileName,
+				this.bFileByteArray);
 		command.setCustomSender(lastCustomSender);
 		command.setSendLater(lastSendLater);
 
