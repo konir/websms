@@ -1583,6 +1583,18 @@ public class WebSMS extends FragmentActivity implements OnClickListener,
 				&& !TextUtils.isEmpty(this.etText.getText());
 		menu.findItem(R.id.item_savechars).setVisible(hasText);
 		menu.findItem(R.id.item_draft).setVisible(hasText);
+		boolean isMmsEnabled = false;
+		if (prefsConnectorSpec != null) {
+			isMmsEnabled = prefsConnectorSpec.isMmsEnabled();
+		} else {
+			this.reloadPrefs();
+			if (prefsConnectorSpec != null) {
+				isMmsEnabled = prefsConnectorSpec.isMmsEnabled();
+			}
+			// at this point if prefsConnectorSpec is still null,
+			// do not show "attachment" menu (isMmsEnabled=false)
+		}
+		menu.findItem(R.id.item_attachment).setVisible(isMmsEnabled);
 		final boolean showRestore = !TextUtils.isEmpty(PreferenceManager
 				.getDefaultSharedPreferences(this).getString(
 						PREFS_BACKUPLASTTEXT, null));
