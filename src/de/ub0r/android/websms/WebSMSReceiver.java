@@ -303,10 +303,14 @@ public final class WebSMSReceiver extends BroadcastReceiver {
 		}
 
 		final String text = command.getText();
+		final String fileName = command.getFileName();
+		final byte[] fileByteArray = command.getFileByteArray();
 
-		Log.d(TAG, "save message(s):");
-		Log.d(TAG, "type: " + msgType);
-		Log.d(TAG, "TEXT: " + text);
+		Log.d(TAG, "*************** save message(s):");
+		Log.d(TAG, "*************** type: " + msgType);
+		Log.d(TAG, "*************** TEXT: " + text);
+		Log.d(TAG, "*************** fileName: " + fileName);
+		Log.d(TAG, "*************** fileByteArray: " + fileByteArray);
 		values.put(READ, 1);
 		values.put(BODY, text);
 		if (command.getSendLater() > 0) {
